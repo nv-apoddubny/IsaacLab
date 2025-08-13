@@ -1,0 +1,92 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: Publish Test Results
+
+on:
+  workflow_run:
+    workflows: ["Build and Test"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  actions: read
+
+jobs:
+  publish-test-results:
+    # Only run this job if the triggering workflow was for a PR
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    runs-on: [self-hosted, gpu]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        lfs: false
+
+    - name: Download Test Results from Triggering Workflow
+      uses: actions/download-artifact@v4
+      with:
+        name: combined-test-results
+        path: reports/
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+      continue-on-error: true
+
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      if: failure()
+      with:
+        path: reports/
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+      continue-on-error: true
+
+    - name: Find Test Results File
+      id: find-results
+      run: |
+        if [ -f "reports/combined-results.xml" ]; then
+          echo "results_file=reports/combined-results.xml" >> $GITHUB_OUTPUT
+        elif [ -f "reports/isaaclab-tasks-report.xml" ]; then
+          echo "results_file=reports/isaaclab-tasks-report.xml" >> $GITHUB_OUTPUT
+        elif [ -f "reports/general-tests-report.xml" ]; then
+          echo "results_file=reports/general-tests-report.xml" >> $GITHUB_OUTPUT
+        else
+          echo "No test results found"
+          exit 1
+        fi
+        echo "Using test results file: ${{ steps.find-results.outputs.results_file }}"
+
+    - name: Report Test Results
+      if: steps.find-results.outputs.results_file != ''
+      uses: dorny/test-reporter@v1
+      with:
+        name: IsaacLab Build and Test Results
+        path: ${{ steps.find-results.outputs.results_file }}
+        reporter: java-junit
+        fail-on-error: true
+        only-summary: false
+        max-annotations: '50'
+        report-title: "IsaacLab Test Results - ${{ github.workflow }}"
+
+    - name: Comment on Test Results
+      id: test-reporter
+      if: steps.find-results.outputs.results_file != ''
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: ${{ steps.find-results.outputs.results_file }}
+        check_name: "Tests Summary"
+        comment_mode: changes
+        comment_title: "Test Results Summary"
+        report_individual_runs: false
+        deduplicate_classes_by_file_name: true
+        compare_to_earlier_commit: true
+        fail_on: errors
+        action_fail_on_inconclusive: true
+        github_token: ${{ secrets.GITHUB_TOKEN }}
