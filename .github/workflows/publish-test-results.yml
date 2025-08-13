@@ -63,7 +63,7 @@ jobs:
         fi
         echo "Using test results file: ${{ steps.find-results.outputs.results_file }}"
 
-    - name: Report Test Results (Check Annotations)
+    - name: Report Test Results
       if: steps.find-results.outputs.results_file != ''
       uses: dorny/test-reporter@v1
       with:
@@ -75,7 +75,7 @@ jobs:
         max-annotations: '50'
         report-title: "IsaacLab Test Results - ${{ github.workflow }}"
 
-    - name: Comment on Test Results (PR Comments)
+    - name: Comment on Test Results
       id: test-reporter
       if: steps.find-results.outputs.results_file != ''
       uses: EnricoMi/publish-unit-test-result-action@v2
