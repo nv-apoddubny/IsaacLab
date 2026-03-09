@@ -50,6 +50,25 @@ jobs:
         fetch-depth: 0
         lfs: true
 
+    - name: Resolve ECR Cache URL
+      run: |
+        # ECR_CACHE_URL is set in /etc/environment by the CF stack. If the runner
+        # daemon started before that file was written (or uses a non-login shell),
+        # fall back to SSM where the same value is stored at instance launch.
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "ECR_CACHE_URL not in environment, querying SSM..."
+          INSTANCE_ID=$(curl -sf http://169.254.169.254/latest/meta-data/instance-id)
+          ECR_CACHE_URL=$(aws ssm get-parameter \
+            --name "/github-runner/${INSTANCE_ID}/ecr-cache-url" \
+            --query 'Parameter.Value' --output text)
+        fi
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "::error::ECR_CACHE_URL could not be resolved from environment or SSM"
+          exit 1
+        fi
+        echo "ECR_CACHE_URL=${ECR_CACHE_URL}" >> $GITHUB_ENV
+        echo "Resolved ECR_CACHE_URL: ${ECR_CACHE_URL}"
+
     - name: Compute ECR image and cache tags
       id: tags
       run: |
@@ -86,6 +105,22 @@ jobs:
       with:
         fetch-depth: 0
         lfs: true
+
+    - name: Resolve ECR Cache URL
+      run: |
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "ECR_CACHE_URL not in environment, querying SSM..."
+          INSTANCE_ID=$(curl -sf http://169.254.169.254/latest/meta-data/instance-id)
+          ECR_CACHE_URL=$(aws ssm get-parameter \
+            --name "/github-runner/${INSTANCE_ID}/ecr-cache-url" \
+            --query 'Parameter.Value' --output text)
+        fi
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "::error::ECR_CACHE_URL could not be resolved from environment or SSM"
+          exit 1
+        fi
+        echo "ECR_CACHE_URL=${ECR_CACHE_URL}" >> $GITHUB_ENV
+        echo "Resolved ECR_CACHE_URL: ${ECR_CACHE_URL}"
 
     - name: Compute ECR image and cache tags
       id: tags

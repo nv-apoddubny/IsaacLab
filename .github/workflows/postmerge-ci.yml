@@ -69,6 +69,22 @@ jobs:
           echo "This is normal when secrets are not configured"
         fi
 
+    - name: Resolve ECR Cache URL
+      run: |
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "ECR_CACHE_URL not in environment, querying SSM..."
+          INSTANCE_ID=$(curl -sf http://169.254.169.254/latest/meta-data/instance-id)
+          ECR_CACHE_URL=$(aws ssm get-parameter \
+            --name "/github-runner/${INSTANCE_ID}/ecr-cache-url" \
+            --query 'Parameter.Value' --output text)
+        fi
+        if [ -z "${ECR_CACHE_URL}" ]; then
+          echo "::error::ECR_CACHE_URL could not be resolved from environment or SSM"
+          exit 1
+        fi
+        echo "ECR_CACHE_URL=${ECR_CACHE_URL}" >> $GITHUB_ENV
+        echo "Resolved ECR_CACHE_URL: ${ECR_CACHE_URL}"
+
     - name: Build and Push Docker Images
       run: |
         # Determine branch name
